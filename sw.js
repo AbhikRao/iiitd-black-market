@@ -43,3 +43,29 @@ self.addEventListener('fetch', (event) => {
     )
   }
 })
+
+// Push notifications (docs/push-notifications.md). The message is {title, body, url, tag}; `url` is an app path
+// such as /inbox/<id>. The tag matches the in-page alert so one event never shows two notifications.
+self.addEventListener('push', (event) => {
+  let data = {}
+  try { data = event.data ? event.data.json() : {} } catch { data = { body: event.data ? event.data.text() : '' } }
+  const path = typeof data.url === 'string' ? data.url : ''
+  event.waitUntil(self.registration.showNotification(data.title || 'IIITD Black Market', {
+    body: data.body || 'You have a new notification',
+    icon: BASE + 'pwa/icon-192.png',
+    badge: BASE + 'pwa/icon-192.png',
+    tag: path || 'notice',
+    data: { url: new URL(path.replace(/^\//, ''), self.registration.scope).href },
+  }))
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const target = event.notification.data && event.notification.data.url
+  const url = typeof target === 'string' && target.startsWith(self.registration.scope) ? target : self.registration.scope
+  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
+    const open = windows.find((w) => w.url.startsWith(self.registration.scope))
+    if (open) return open.focus().then((w) => (w && 'navigate' in w ? w.navigate(url) : undefined))
+    return self.clients.openWindow(url)
+  }))
+})
